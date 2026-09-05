@@ -33,21 +33,17 @@ Q4 GGUF) generates body motion between decisions.
   (motion-bricks, Kimodo text-to-motion, EditScore judgment).
 - **Release bundle**: distributed as an **uncompressed sqlar**
   (SQLite Archive) whose rows hold **zstd-compressed casync
-  chunks**. Uncompressed outer for random access + fast open;
-  inner casync chunks are content-addressed so identical chunks
-  dedupe across releases, and each chunk is zstd-compressed for
-  space. Contents include **model weights** (motion-bricks,
-  EditScore, Kimodo GGUFs) **and the compiled GDScript ELFs**
-  (`game.gen.elf` and any peer modules' `*.gen.elf`) that
-  libriscv interprets at runtime. Runtime opens the sqlar with
-  `sqlite3_open()`, reads the casync index row for each artifact,
-  reassembles by concatenating chunk-blob rows in order, hands
-  ELF bytes to libriscv (via modules/sandbox) and weight bytes
-  to ggml.
-- **Godot binary**: one file. No embedded ELFs, no embedded
-  weights. The binary bundles the engine + Vulkan + modules
-  (including modules/sandbox and this modules/game SCsub hook)
-  and reads everything else from the sqlar alongside.
+  chunks**. Contents: **model weights** (motion-bricks, EditScore,
+  Kimodo GGUFs) **and the compiled GDScript ELFs** (`game.gen.elf`
+  and any peer modules' `*.gen.elf`). Runtime opens the sqlar with
+  `sqlite3_open()`, reassembles each artifact from its casync chunks,
+  hands ELF bytes to libriscv (interpretation mode; fast start,
+  cross-platform) and weight bytes to ggml.
+- **Binary translation** is opt-in and happens on the **player's**
+  machine at first run: `Sandbox::try_compile_binary_translation`
+  produces a native `.so` cached under `user://` for subsequent
+  runs. Never in CI/CD, never in the ship.
+- **Godot binary**: one file. No embedded ELFs, no embedded weights.
 - **CineForm** encoder (ffmpeg blocklisted).
 - **Nord palette** for demo chrome.
 
