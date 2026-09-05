@@ -1,30 +1,41 @@
 #!/usr/bin/env python
-# Build pipeline:
-#   game.gd -> game.gen.elf -> game.gen.cpp -> linked into godot binary
+# Build pipeline for the single-binary game:
 #
-# One binary ships. game.gd is embedded as bytes in a RISC-V ELF (via
-# objcopy or llvm-objcopy), that ELF is embedded byte-for-byte into a
-# generated C++ source, and the source compiles into the module. At
-# runtime the sandbox module reads the array and hands it to libriscv.
-# Model weights come from a CDN (huggingface) — not from disk.
+#   game.gd  ──► game.gen.elf  ──► game.gen.cpp  ──► linked into godot
+#
+# Step 1 wraps game.gd's bytes into a RISC-V ELF (llvm-objcopy /
+# objcopy). Step 2 runs godot-sandbox's *bintr* mode over that ELF —
+# libriscv's binary translator (`emit_binary_translation`) reads the
+# RISC-V instructions and emits native C source. That C source
+# compiles into the godot binary; at runtime the sandbox module
+# calls `load_binary_translation` on the compiled-in symbol so the
+# game runs at native speed (5-50x interpreted per libriscv docs)
+# with no per-instruction dispatch overhead.
+#
+# The bintr tool needs a working godot to run (Sandbox is a Godot
+# class). This is the standard two-stage build shape:
+#   1. build godot without bintr embedded (fast; gen.cpp is a stub)
+#   2. use the just-built godot to translate ELFs into real gen.cpp
+#   3. rebuild godot with the translated gen.cpp embedded (fast bin)
+#
+# The GODOT_BINTR env var points at a godot binary from stage 1.
+# When unset, gen.cpp is a stub that boots the ELF via interpretation
+# instead of native translation — same behaviour, slower.
+#
+# Weights (motion-bricks, EditScore, Kimodo GGUFs) do NOT ship in
+# the binary. They live in the release-side sqlar (uncompressed
+# sqlar of zstd-compressed casync chunks) alongside the binary.
 
 Import("env")
 Import("env_modules")
 
+import os
 import shutil
 import subprocess
 
-env_game = env_modules.Clone()
-
 
 def gd_to_gen_elf(target, source, env):
-    """Wrap game.gd's bytes as a RISC-V ELF section.
-
-    Tries llvm-objcopy (llvm toolchain, present on most dev machines)
-    then GNU objcopy. --input-target binary reads the source as raw
-    bytes; --output-target elf64-littleriscv writes a RISC-V ELF with
-    the bytes exposed under symbols godot-sandbox can find.
-    """
+    """game.gd -> game.gen.elf via objcopy (raw bytes into ELF section)."""
     src = str(source[0])
     dst = str(target[0])
     for tool in ("llvm-objcopy", "objcopy"):
@@ -41,24 +52,56 @@ def gd_to_gen_elf(target, source, env):
         return None
     raise Exception(
         "modules/game: need llvm-objcopy or objcopy on PATH to build game.gen.elf "
-        "(scoop install llvm on Windows, brew install llvm on macOS, "
-        "apt install binutils on Linux)"
+        "(brew install llvm on macOS, apt install binutils on Linux, "
+        "scoop install llvm on Windows)"
     )
 
 
-def gen_elf_to_gen_cpp(target, source, env):
-    """Embed the .gen.elf byte-for-byte as a C++ const array.
+def gen_elf_to_gen_cpp_bintr(target, source, env):
+    """game.gen.elf -> game.gen.cpp via godot-sandbox's bintr mode.
 
-    Produces:
-        extern "C" const size_t game_gen_elf_len = N;
-        extern "C" const uint8_t game_gen_elf[] = { 0x7f, 0x45, ... };
-    Godot's linker pulls both symbols into the binary; register_types.cpp
-    references them at module init.
+    If GODOT_BINTR is set to a godot binary, invoke it with a small
+    driver script that loads the ELF into a Sandbox and calls
+    emit_binary_translation(). Save the returned C source as
+    game.gen.cpp. That C source is native-machine-code-equivalent
+    to the RISC-V bytecode and compiles into the godot binary at
+    native speed.
+
+    Fallback: emit a minimal gen.cpp that just holds the ELF bytes
+    under weak symbols. The sandbox module will fall back to
+    interpretation. Not native-fast, but correct.
     """
-    with open(str(source[0]), "rb") as f:
+    elf_path = str(source[0])
+    cpp_path = str(target[0])
+    godot_bintr = env.get("GODOT_BINTR") or os.environ.get("GODOT_BINTR")
+
+    if godot_bintr and shutil.which(godot_bintr):
+        driver = os.path.join(os.path.dirname(cpp_path), "_bintr_driver.gd")
+        with open(driver, "w") as f:
+            f.write(
+                "extends SceneTree\n"
+                "func _init():\n"
+                "    var s := Sandbox.new()\n"
+                "    var bytes := FileAccess.get_file_as_bytes(\"%s\")\n"
+                "    s.load_buffer(bytes)\n"
+                "    var src := s.emit_binary_translation()\n"
+                "    var out := FileAccess.open(\"%s\", FileAccess.WRITE)\n"
+                "    out.store_string(src)\n"
+                "    out.close()\n"
+                "    quit()\n" % (elf_path, cpp_path)
+            )
+        subprocess.run([godot_bintr, "--headless", "--script", driver], check=True)
+        os.remove(driver)
+        return None
+
+    # Fallback: raw ELF bytes with a weak-symbol wrapper. Interpretation-mode
+    # boot; the sandbox module reads the byte array and hands it to libriscv.
+    with open(elf_path, "rb") as f:
         data = f.read()
     lines = [
-        "// Generated by modules/game/SCsub — do not edit; edit game.gd instead.",
+        "// Generated by modules/game/SCsub (fallback: no GODOT_BINTR set).",
+        "// Set GODOT_BINTR=<path/to/godot> to regenerate this file via",
+        "// libriscv's binary translator for native-speed execution.",
         "#include <cstddef>",
         "#include <cstdint>",
         "",
@@ -69,12 +112,13 @@ def gen_elf_to_gen_cpp(target, source, env):
         chunk = data[i:i + 16]
         lines.append("    " + ", ".join("0x%02x" % b for b in chunk) + ",")
     lines.append("};")
-    with open(str(target[0]), "w") as f:
+    with open(cpp_path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
 
+env_game = env_modules.Clone()
 env_game.Command("game.gen.elf", "game.gd", gd_to_gen_elf)
-env_game.Command("game.gen.cpp", "game.gen.elf", gen_elf_to_gen_cpp)
+env_game.Command("game.gen.cpp", "game.gen.elf", gen_elf_to_gen_cpp_bintr)
 
 env_game.add_source_files(env.modules_sources, [
     "register_types.cpp",
