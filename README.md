@@ -31,8 +31,16 @@ Q4 GGUF) generates body motion between decisions.
   no unsandboxed GDScript addon.
 - **ggml** with Vulkan backend for every inference call
   (motion-bricks, Kimodo text-to-motion, EditScore judgment).
-- **Model bundle**: ZSTD-compressed SQLite on local disk, loaded
-  via `sqlite3_open()` on install path.
+- **Model bundle**: distributed in the release as an
+  **uncompressed sqlar** (SQLite Archive) whose rows hold
+  **zstd-compressed casync chunks**. Uncompressed outer for
+  random access + fast open; inner casync chunks are content-
+  addressed so identical chunks dedupe across models and
+  releases, and each chunk is zstd-compressed for space. Runtime
+  opens the sqlar with `sqlite3_open()`, reads the casync index
+  row, and reassembles a model file by concatenating chunk-blob
+  rows in index order. Nothing fetched at runtime; the release
+  is self-contained (binary + sqlar).
 - **CineForm** encoder (ffmpeg blocklisted).
 - **Nord palette** for demo chrome.
 
