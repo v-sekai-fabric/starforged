@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Game" inherits="Node" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Root node for the Starforged decision-point VN (RFD 1175).
+	</brief_description>
+	<description>
+		Native window, VRM portrait framed like a video call. Taskweft planner supplies legal moves at each decision point; outcome fires a VRM expression blendshape. Motion between decisions comes from motion-bricks via ggml on the Vulkan backend. The same binary invoked with [code]--headless --write-movie[/code] captures the video head.
+	</description>
+	<tutorials>
+	</tutorials>
+	<signals>
+		<signal name="decision_point">
+			<param index="0" name="legal_moves" type="Array" />
+			<description>
+				Emitted when the planner has surfaced a new set of legal moves for the player.
+			</description>
+		</signal>
+		<signal name="move_outcome">
+			<param index="0" name="outcome" type="StringName" />
+			<description>
+				Emitted when a move outcome resolves. Values: [code]strong_hit[/code], [code]weak_hit[/code], [code]miss[/code].
+			</description>
+		</signal>
+	</signals>
+</class>
