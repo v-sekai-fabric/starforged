@@ -31,19 +31,18 @@ Q4 GGUF) generates body motion between decisions.
   no unsandboxed GDScript addon.
 - **ggml** with Vulkan backend for every inference call
   (motion-bricks, Kimodo text-to-motion, EditScore judgment).
-- **Release bundle**: distributed as an **uncompressed sqlar**
-  (SQLite Archive) whose rows hold **zstd-compressed casync
-  chunks**. Contents: **model weights** (motion-bricks, EditScore,
-  Kimodo GGUFs) **and the compiled GDScript ELFs** (`game.gen.elf`
-  and any peer modules' `*.gen.elf`). Runtime opens the sqlar with
-  `sqlite3_open()`, reassembles each artifact from its casync chunks,
-  hands ELF bytes to libriscv (interpretation mode; fast start,
-  cross-platform) and weight bytes to ggml.
+- **Release layout**: standard Godot — one `godot` binary +
+  either a `godot.pck` next to it (production) or a loose
+  `project.godot` + `res://` tree (dev). Godot auto-loads
+  either at startup. Contents: `game.gd`, `.tscn` scenes,
+  `.tres` materials, model weights (motion-bricks, EditScore,
+  Kimodo GGUFs), the `starforged.sqlite` fixture. Sandbox
+  module loads game.gd from `res://` and hands it to libriscv
+  (interpretation mode; fast start, cross-platform).
 - **Binary translation** is opt-in and happens on the **player's**
   machine at first run: `Sandbox::try_compile_binary_translation`
   produces a native `.so` cached under `user://` for subsequent
   runs. Never in CI/CD, never in the ship.
-- **Godot binary**: one file. No embedded ELFs, no embedded weights.
 - **CineForm** encoder (ffmpeg blocklisted).
 - **Nord palette** for demo chrome.
 
