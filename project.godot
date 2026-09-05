@@ -1,0 +1,19 @@
+; Godot project — Starforged decision-point VN (RFD 1175).
+;
+; Engine ships with module_gdscript_enabled=no. Every script in this
+; project is a .sgd (sandbox-godot-script) compiled to a RISC-V ELF
+; via godot-sandbox and loaded by libriscv. No plain .gd files, no
+; GDExtension shared libraries — one Godot binary + this project (or
+; its exported .pck) is the whole shipping surface.
+
+config_version = 5
+
+[application]
+
+config/name = "Starforged"
+config/description = "Decision-point VN, VRM interlocutor. RFD 1175."
+config/features = PackedStringArray("4.7")
+
+[rendering]
+
+renderer/rendering_method = "forward_plus"

@@ -32,13 +32,20 @@ Q4 GGUF) generates body motion between decisions.
 - **ggml** with Vulkan backend for every inference call
   (motion-bricks, Kimodo text-to-motion, EditScore judgment).
 - **Release layout**: standard Godot — one `godot` binary +
-  either a `godot.pck` next to it (production) or a loose
+  either a `.pck` next to it (production) or a loose
   `project.godot` + `res://` tree (dev). Godot auto-loads
-  either at startup. Contents: `game.gd`, `.tscn` scenes,
-  `.tres` materials, model weights (motion-bricks, EditScore,
-  Kimodo GGUFs), the `starforged.sqlite` fixture. Sandbox
-  module loads game.gd from `res://` and hands it to libriscv
-  (interpretation mode; fast start, cross-platform).
+  either at startup. Contents: `game.sgd` (and any other
+  `.sgd` sources — no plain `.gd`), `.tscn` scenes, `.tres`
+  materials, model weights (motion-bricks, EditScore, Kimodo
+  GGUFs), the `starforged.sqlite` fixture.
+- **Scripts are `.sgd`** (sandbox-godot-script). The engine
+  ships with `module_gdscript_enabled=no`; every script is a
+  godot-sandbox program compiled to RISC-V ELF via zig cc +
+  libriscv, run under libriscv (interpretation by default;
+  opt-in bintr cached under `user://` per player).
+  **No GDExtension** — no shared libraries loaded at runtime.
+  One binary + one project (or `.pck`) is the whole shipping
+  surface.
 - **Binary translation** is opt-in and happens on the **player's**
   machine at first run: `Sandbox::try_compile_binary_translation`
   produces a native `.so` cached under `user://` for subsequent
