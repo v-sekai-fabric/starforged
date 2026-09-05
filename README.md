@@ -31,13 +31,17 @@ Q4 GGUF) generates body motion between decisions.
   no unsandboxed GDScript addon.
 - **ggml** with Vulkan backend for every inference call
   (motion-bricks, Kimodo text-to-motion, EditScore judgment).
-- **Release layout**: standard Godot — one `godot` binary +
-  either a `.pck` next to it (production) or a loose
-  `project.godot` + `res://` tree (dev). Godot auto-loads
-  either at startup. Contents: `game.sgd` (and any other
-  `.sgd` sources — no plain `.gd`), `.tscn` scenes, `.tres`
-  materials, model weights (motion-bricks, EditScore, Kimodo
-  GGUFs), the `starforged.sqlite` fixture.
+- **Release layout**: **one file**. The .pck is appended to
+  the godot binary via Godot's embed-PCK export option; the
+  runtime detects the appended payload at startup and loads
+  it as if it were a sibling .pck. No `.pck` on disk next to
+  the executable, no loose `project.godot` in the ship. Dev
+  builds still use the loose `project.godot` + `res://` tree
+  in this repo. Contents packed into the embedded PCK:
+  `game.sgd` (and other `.sgd` sources — no plain `.gd`),
+  `.tscn` scenes, `.tres` materials, model weights (motion-
+  bricks, EditScore, Kimodo GGUFs), the `starforged.sqlite`
+  fixture.
 - **Scripts are `.sgd`** (sandbox-godot-script). The engine
   ships with `module_gdscript_enabled=no`; every script is a
   godot-sandbox program compiled to RISC-V ELF via zig cc +
