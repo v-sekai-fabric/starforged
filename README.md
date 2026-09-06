@@ -31,29 +31,8 @@ Q4 GGUF) generates body motion between decisions.
   no unsandboxed GDScript addon.
 - **ggml** with Vulkan backend for every inference call
   (motion-bricks, Kimodo text-to-motion, EditScore judgment).
-- **Release layout**: **one file**. The .pck is appended to
-  the godot binary via Godot's embed-PCK export option; the
-  runtime detects the appended payload at startup and loads
-  it as if it were a sibling .pck. No `.pck` on disk next to
-  the executable, no loose `project.godot` in the ship. Dev
-  builds still use the loose `project.godot` + `res://` tree
-  in this repo. Contents packed into the embedded PCK:
-  `game.sgd` (and other `.sgd` sources — no plain `.gd`),
-  `.tscn` scenes, `.tres` materials, model weights (motion-
-  bricks, EditScore, Kimodo GGUFs), the `starforged.sqlite`
-  fixture.
-- **Scripts are `.sgd`** (sandbox-godot-script). The engine
-  ships with `module_gdscript_enabled=no`; every script is a
-  godot-sandbox program compiled to RISC-V ELF via zig cc +
-  libriscv, run under libriscv (interpretation by default;
-  opt-in bintr cached under `user://` per player).
-  **No GDExtension** — no shared libraries loaded at runtime.
-  One binary + one project (or `.pck`) is the whole shipping
-  surface.
-- **Binary translation** is opt-in and happens on the **player's**
-  machine at first run: `Sandbox::try_compile_binary_translation`
-  produces a native `.so` cached under `user://` for subsequent
-  runs. Never in CI/CD, never in the ship.
+- **Model bundle**: ZSTD-compressed SQLite on local disk, loaded
+  via `sqlite3_open()` on install path.
 - **CineForm** encoder (ffmpeg blocklisted).
 - **Nord palette** for demo chrome.
 
